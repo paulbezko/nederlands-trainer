@@ -137,6 +137,12 @@
     border:none; font:inherit; font-size:11px; font-weight:600; cursor:pointer; padding:4px 0; color:var(--muted); }
   .tab.on{ color:var(--accent); }
   .tab .ic{ font-size:16px; line-height:1; }
+  .banner{ background:color-mix(in srgb, var(--accent) 12%, transparent); border:1px solid color-mix(in srgb, var(--accent) 35%, transparent); border-radius:var(--radius); padding:12px 14px; font-size:13px; line-height:1.5; color:var(--text); }
+  .banner b{ font-weight:600; }
+  .banner .acts, .importbar .acts{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .banner button, .importbar button{ background:var(--accent); color:var(--accent-ink); border:none; border-radius:6px; padding:8px 12px; font:inherit; font-size:12px; font-weight:600; cursor:pointer; }
+  .banner button.ghost, .importbar button.ghost{ background:transparent; color:var(--muted); border:1px solid var(--line); }
+  .importbar{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:12px 14px; font-size:13px; color:var(--text); line-height:1.5; }
 </style>
 </head>
 <body>
@@ -151,6 +157,7 @@
 
   <div id="scroll">
     <div class="page" id="pgPractice">
+      <div id="dutchBanner" class="banner" hidden></div>
       <div class="card hero">
         <div class="hero-top">
           <span class="badge" id="badge">Now practicing</span>
@@ -188,10 +195,13 @@
       <div class="words-top">
         <span class="lbl" id="wordsSel">0 selected</span>
         <div style="display:flex; gap:8px;">
+          <button class="chip" id="importBtn">Import</button>
           <button class="chip" id="selAll">Select all</button>
           <button class="chip" id="clear">Clear</button>
         </div>
       </div>
+      <input type="file" id="importFile" accept=".json,application/json" style="display:none">
+      <div id="importBar" class="importbar" hidden></div>
       <div id="groups" style="display:flex; flex-direction:column; gap:14px;"></div>
     </div>
 
@@ -230,6 +240,12 @@
         <div class="field"><label>English voice</label><select id="enVoice"></select></div>
         <div class="voicewarn" id="voiceWarn" hidden></div>
       </div>
+
+      <div class="divider"></div>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <span class="sec-title">Audio</span>
+        <button class="chip" id="audioHelp" style="align-self:flex-start;">Dutch not playing? Enable it</button>
+      </div>
     </div>
   </div>
 
@@ -266,7 +282,11 @@
   };
   var queue=[], timer=null;
 
-  function vocab(){ return (window.VOCAB&&Array.isArray(window.VOCAB.groups))?window.VOCAB:{groups:[]}; }
+  var ACTIVE=store.get('nl_vocab',null);
+  function vocab(){
+    if(ACTIVE&&Array.isArray(ACTIVE.groups)&&ACTIVE.groups.length) return ACTIVE;
+    return (window.VOCAB&&Array.isArray(window.VOCAB.groups))?window.VOCAB:{groups:[]};
+  }
   function nlLang(){ return vocab().dutchLang||'nl-NL'; }
   function enLang(){ return vocab().translationLang||'en-US'; }
   function keyFor(g,i){ return g+':'+i; }
@@ -430,13 +450,7 @@
         NativeTTS.getSupportedLanguages().then(function(res){
           var langs=(res&&res.languages)||[];
           var hasNl=langs.some(function(l){return /^nl/i.test(l);});
-          if(!hasNl){
-            $('voicesSection').style.display='flex';
-            $('nlVoice').parentNode.style.display='none';
-            $('enVoice').parentNode.style.display='none';
-            var warn=$('voiceWarn'); warn.hidden=false;
-            warn.innerHTML="Your phone has no Dutch voice installed. Add it in <b>Settings &rarr; System &rarr; Languages &rarr; Text-to-speech output</b> (install the Dutch language data), then reopen the app.";
-          }
+          if(!hasNl){ showDutchBanner(); }
         }).catch(function(){});
       }
       return;
@@ -559,6 +573,82 @@
   document.addEventListener('visibilitychange',function(){
     if(!IS_NATIVE&&!document.hidden&&S.running&&!S.paused&&window.speechSynthesis&&window.speechSynthesis.paused) window.speechSynthesis.resume();
   });
+
+  // ---------- import words (JSON) ----------
+  function normalizeVocab(data){
+    var dl=(data&&data.dutchLang)||nlLang(), tl=(data&&data.translationLang)||enLang();
+    function item(it){
+      if(!it||typeof it!=='object') return null;
+      var nl=it.nl||it.dutch||it.Dutch||it.NL||it.nl_text||it.word;
+      var en=it.en||it.english||it.English||it.EN||it.translation||it.meaning;
+      if(!nl||!en) return null;
+      var o={ nl:String(nl).trim(), en:String(en).trim() };
+      var note=it.note||it.hint; if(note) o.note=String(note).trim();
+      return o;
+    }
+    var groups=[];
+    if(data&&Array.isArray(data.groups)){
+      data.groups.forEach(function(g,i){
+        var its=((g&&(g.items||g.words))||[]).map(item).filter(Boolean);
+        if(its.length) groups.push({ id:(g&&g.id)||('g'+i), name:(g&&(g.name||g.title))||('Group '+(i+1)), items:its });
+      });
+    } else if(Array.isArray(data)){
+      var a=data.map(item).filter(Boolean);
+      if(a.length) groups.push({ id:'imported', name:'Imported', items:a });
+    } else if(data&&Array.isArray(data.items)){
+      var b=data.items.map(item).filter(Boolean);
+      if(b.length) groups.push({ id:'imported', name:data.name||'Imported', items:b });
+    }
+    if(!groups.length) return null;
+    return { dutchLang:dl, translationLang:tl, groups:groups };
+  }
+  function countItems(v){ var n=0; (v.groups||[]).forEach(function(g){n+=g.items.length;}); return n; }
+  function showImportBar(html){ var b=$('importBar'); b.hidden=false; b.innerHTML=html; }
+  function hideImportBar(){ var b=$('importBar'); b.hidden=true; b.innerHTML=''; }
+  function applyVocab(v){
+    ACTIVE=v; store.set('nl_vocab',v);
+    S.selected=new Set(); S.open={};
+    if(v.groups[0]) v.groups[0].items.forEach(function(_,ii){ S.selected.add('0:'+ii); });
+    renderGroups(); updatePreview(); updateNow();
+  }
+  var pendingImport=null;
+  $('importBtn').addEventListener('click',function(){ $('importFile').value=''; $('importFile').click(); });
+  $('importFile').addEventListener('change',function(e){
+    var file=e.target.files&&e.target.files[0]; if(!file) return;
+    var r=new FileReader();
+    r.onload=function(){
+      var v=null, err='';
+      try{ v=normalizeVocab(JSON.parse(r.result)); }
+      catch(ex){ err="That file isn't valid JSON."; }
+      if(!v){
+        showImportBar("<b>Couldn't import.</b> "+(err||"No word pairs found.")+" Each item needs an <b>nl</b> (Dutch) and <b>en</b> (English) field."+'<div class="acts"><button class="ghost" id="impCancel">OK</button></div>');
+        $('impCancel').onclick=hideImportBar; return;
+      }
+      pendingImport=v;
+      var cur=vocab(); var curN=(cur&&cur.groups)?countItems(cur):0;
+      var h="<b>"+countItems(v)+" words</b> in "+v.groups.length+" group(s) ready."+'<div class="acts"><button id="impReplace">Replace all</button>';
+      if(curN) h+='<button class="ghost" id="impAdd">Add to current</button>';
+      h+='<button class="ghost" id="impCancel">Cancel</button></div>';
+      showImportBar(h);
+      $('impReplace').onclick=function(){ applyVocab(pendingImport); hideImportBar(); };
+      var add=$('impAdd'); if(add) add.onclick=function(){
+        var c=vocab();
+        applyVocab({ dutchLang:c.dutchLang, translationLang:c.translationLang, groups:(c.groups||[]).concat(pendingImport.groups) });
+        hideImportBar();
+      };
+      $('impCancel').onclick=hideImportBar;
+    };
+    r.readAsText(file);
+  });
+
+  // ---------- dutch voice guidance ----------
+  function showDutchBanner(){
+    var b=$('dutchBanner'); if(!b) return; b.hidden=false;
+    b.innerHTML="<b>Dutch audio isn't enabled on this phone yet.</b> English works, but the Dutch voice has to be installed once: open <b>Settings &rarr; System &rarr; Languages &amp; input &rarr; Text-to-speech output</b>, tap the gear next to your engine (usually Google), choose <b>Install voice data &rarr; Nederlands</b>, then reopen this app."+'<div class="acts"><button id="dbTest">Test Dutch</button><button class="ghost" id="dbHide">Dismiss</button></div>';
+    $('dbTest').onclick=function(){ speak('Goedemorgen','nl',function(){}); };
+    $('dbHide').onclick=function(){ b.hidden=true; };
+  }
+  $('audioHelp').addEventListener('click',function(){ setTab('practice'); showDutchBanner(); });
 
   function initVocab(tries){
     var V=vocab();
