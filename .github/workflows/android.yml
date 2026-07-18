@@ -1,0 +1,113 @@
+name: Build APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Prepare project files
+        run: |
+          mkdir -p www
+          [ -f index.html ] && mv index.html www/ || true
+          [ -f words.js ] && mv words.js www/ || true
+          cat > package.json <<'JSON'
+          { "name": "nederlands", "version": "1.0.0", "private": true }
+          JSON
+          cat > capacitor.config.json <<'JSON'
+          { "appId": "com.paulbezko.dutchtrainer", "appName": "Nederlands", "webDir": "www" }
+          JSON
+          ls -la www
+
+      - name: Install Capacitor
+        run: npm install @capacitor/core@8 @capacitor/cli@8 @capacitor/android@8 @capacitor-community/text-to-speech@8 --no-audit --no-fund
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Branding (name + icon)
+        run: |
+          set +e
+          RES=android/app/src/main/res
+          sed -i 's#<string name="app_name">[^<]*</string>#<string name="app_name">Nederlands</string>#' "$RES/values/strings.xml"
+          sed -i 's#<string name="title_activity_main">[^<]*</string>#<string name="title_activity_main">Nederlands</string>#' "$RES/values/strings.xml"
+          cat > "$RES/values/ic_launcher_background.xml" <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="ic_launcher_background">#2338D8</color>
+          </resources>
+          XML
+          python3 -m pip install --quiet pillow 2>/dev/null
+          python3 - <<'PY'
+          try:
+              from PIL import Image, ImageDraw, ImageFont
+              import os
+              RES="android/app/src/main/res"
+              BLUE=(0x23,0x38,0xd8,255); WHITE=(255,255,255,255)
+              cand=["/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"]
+              FONT=next((c for c in cand if os.path.exists(c)), None)
+              def font(sz): return ImageFont.truetype(FONT,sz) if FONT else ImageFont.load_default()
+              def draw(size,frac,bg):
+                  img=Image.new("RGBA",(size,size),bg); d=ImageDraw.Draw(img)
+                  target=size*frac; fs=int(target)
+                  while fs>4:
+                      f=font(fs); b=d.textbbox((0,0),"NL",font=f)
+                      if (b[2]-b[0])<=target and (b[3]-b[1])<=target: break
+                      fs-=2
+                  f=font(fs); b=d.textbbox((0,0),"NL",font=f)
+                  w=b[2]-b[0]; h=b[3]-b[1]
+                  d.text(((size-w)/2-b[0],(size-h)/2-b[1]),"NL",font=f,fill=WHITE)
+                  return img
+              legacy={"mipmap-mdpi":48,"mipmap-hdpi":72,"mipmap-xhdpi":96,"mipmap-xxhdpi":144,"mipmap-xxxhdpi":192}
+              for d_,s in legacy.items():
+                  sq=draw(s,0.58,BLUE); sq.save(f"{RES}/{d_}/ic_launcher.png")
+                  mask=Image.new("L",(s,s),0); md=ImageDraw.Draw(mask); md.ellipse((0,0,s-1,s-1),fill=255)
+                  rnd=Image.new("RGBA",(s,s),(0,0,0,0)); rnd.paste(sq,(0,0),mask); rnd.save(f"{RES}/{d_}/ic_launcher_round.png")
+              fg={"mipmap-mdpi":108,"mipmap-hdpi":162,"mipmap-xhdpi":216,"mipmap-xxhdpi":324,"mipmap-xxxhdpi":432}
+              for d_,s in fg.items():
+                  draw(s,0.40,(0,0,0,0)).save(f"{RES}/{d_}/ic_launcher_foreground.png")
+              print("icons generated")
+          except Exception as e:
+              print("icon generation skipped:", e)
+          PY
+          set -e
+          echo "branding done"
+
+      - name: Sync web assets
+        run: npx cap sync android
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: yes | sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools" >/dev/null 2>&1 || true
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: nederlands-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
