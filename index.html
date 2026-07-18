@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Nederlands · Audio trainer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#ffffff; --surface:#fbfbfb; --text:#111111; --muted:#767676; --line:#e6e6e6;
+    --accent:#2338d8; --accent-ink:#ffffff; --shadow:#11131f;
+    --radius:6px; --hero-radius:8px;
+    --ui:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;
+  }
+  [data-mode="dark"]{
+    --bg:#0a0a0a; --surface:#101010; --text:#f2f2f2; --muted:#8a8a8a; --line:#212121;
+    --accent:#5b73ff; --accent-ink:#070a1a; --shadow:#000000;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; height:100%; }
+  body{
+    background:var(--bg); color:var(--text); font-family:var(--ui);
+    -webkit-font-smoothing:antialiased; display:flex; flex-direction:column;
+    min-height:100vh; overflow:hidden;
+  }
+  @keyframes tp-pulse{ 0%,100%{opacity:1;} 50%{opacity:.5;} }
+  @keyframes tp-bar{ 0%,100%{transform:scaleY(.35);} 50%{transform:scaleY(1);} }
+  @keyframes tp-fade{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;} }
+
+  #app{ display:flex; flex-direction:column; height:100vh; height:100dvh;
+        padding-top:env(safe-area-inset-top); }
+  header{ display:flex; align-items:center; justify-content:space-between;
+          padding:16px 22px 14px; flex:0 0 auto; }
+  .title{ display:flex; flex-direction:column; gap:2px; }
+  .title .t1{ font-size:20px; font-weight:600; letter-spacing:-.3px; font-family:var(--mono); }
+  .title .t2{ font-size:12px; color:var(--muted); font-weight:500; }
+  #modeBtn{ display:flex; align-items:center; gap:7px; background:var(--surface);
+            border:1px solid var(--line); color:var(--text); border-radius:999px;
+            padding:7px 12px; font:inherit; font-size:12px; font-weight:600; cursor:pointer; }
+  #modeBtn .dot{ width:9px; height:9px; border-radius:999px; background:var(--accent); display:inline-block; }
+
+  #scroll{ flex:1 1 auto; overflow-y:auto; -webkit-overflow-scrolling:touch;
+           padding:0 18px calc(96px + env(safe-area-inset-bottom)); }
+  .page{ animation:tp-fade .25s ease; display:flex; flex-direction:column; gap:16px; }
+  .page[hidden]{ display:none; }
+
+  .card{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); }
+  .hero{ position:relative; border-radius:var(--hero-radius); padding:24px 22px;
+         min-height:284px; display:flex; flex-direction:column; }
+  .hero-top{ display:flex; align-items:center; justify-content:space-between; }
+  .badge{ font-size:11px; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; color:var(--accent); }
+  .prog{ font-size:11px; font-weight:500; letter-spacing:.5px; color:var(--muted); font-family:var(--mono); }
+  .wave{ display:flex; align-items:flex-end; gap:4px; height:34px; margin-top:18px; }
+  .wave i{ width:5px; border-radius:3px; background:var(--accent); transform-origin:bottom; display:block; }
+  .hero-mid{ flex:1 1 auto; display:flex; flex-direction:column; align-items:center;
+             justify-content:center; text-align:center; gap:10px; padding:12px 0; }
+  .cur-nl{ font-size:40px; line-height:1.05; font-weight:500; font-family:var(--mono); color:var(--text); word-break:break-word; }
+  .cur-en{ font-size:20px; font-weight:400; color:var(--muted); }
+  .cur-note{ font-size:12px; color:var(--muted); font-style:italic; }
+  .idle-t{ font-size:17px; font-weight:600; color:var(--text); }
+  .idle-s{ font-size:13px; color:var(--muted); max-width:230px; line-height:1.5; }
+  .speaking{ animation:tp-pulse 1s ease-in-out infinite; }
+  .cur-en.on{ color:var(--accent); }
+
+  .transport{ display:flex; align-items:center; justify-content:center; gap:22px; padding:4px 0; }
+  .sec-btn{ width:52px; height:52px; border-radius:10px; background:var(--surface);
+            border:1px solid var(--line); color:var(--text); font-size:20px; cursor:pointer;
+            display:flex; align-items:center; justify-content:center; }
+  .play-btn{ width:74px; height:74px; border-radius:10px; background:var(--accent);
+             color:var(--accent-ink); border:none; font-size:24px; font-weight:600; cursor:pointer;
+             display:flex; align-items:center; justify-content:center;
+             box-shadow:5px 5px 0 0 var(--shadow); transition:transform .12s ease, box-shadow .12s ease; }
+  .play-btn:active{ transform:translate(3px,3px); box-shadow:2px 2px 0 0 var(--shadow); }
+  button:disabled{ opacity:.4; cursor:default; }
+  .stop-row{ display:flex; align-items:center; justify-content:center; }
+  #stop{ background:none; border:none; color:var(--muted); font:inherit; font-size:12px;
+         font-weight:600; cursor:pointer; letter-spacing:.3px; }
+
+  .summary{ padding:14px 16px; display:flex; flex-direction:column; gap:8px; }
+  .summary .row{ display:flex; align-items:center; justify-content:space-between; }
+  .summary .k{ font-size:13px; color:var(--muted); }
+  .summary .v{ font-size:13px; font-weight:600; }
+  .summary .v.mono{ font-family:var(--mono); }
+  .divider{ height:1px; background:var(--line); }
+
+  .words-top{ display:flex; align-items:center; justify-content:space-between; padding-top:4px; }
+  .words-top .lbl{ font-size:13px; color:var(--muted); font-weight:600; }
+  .chip{ background:var(--surface); border:1px solid var(--line); color:var(--text);
+         border-radius:999px; padding:7px 13px; font:inherit; font-size:12px; font-weight:600; cursor:pointer; }
+  .group{ overflow:hidden; }
+  .group-head{ display:flex; align-items:center; gap:12px; padding:14px 16px; cursor:pointer; }
+  .group-head .gname{ flex:1; font-size:15px; font-weight:600; letter-spacing:-.2px; }
+  .group-head .gcount{ font-size:12px; color:var(--muted); font-weight:500; font-family:var(--mono); }
+  .chev{ font-size:20px; color:var(--muted); transition:transform .2s; display:inline-block; transform:rotate(90deg); }
+  .group.closed .chev{ transform:rotate(0deg); }
+  .group.closed .items{ display:none; }
+  .items{ padding:2px 8px 8px; }
+  .item{ display:flex; align-items:flex-start; gap:12px; padding:9px 10px; border-radius:2px; cursor:pointer; }
+  .item .nl{ font-size:15px; font-weight:500; color:var(--text); }
+  .item .en{ font-size:12px; color:var(--muted); }
+  .item .col{ display:flex; flex-direction:column; gap:2px; flex:1; }
+  input[type=checkbox]{ width:18px; height:18px; margin-top:1px; accent-color:var(--accent); cursor:pointer; }
+  .group-head input[type=checkbox]{ width:19px; height:19px; margin-top:0; }
+
+  .sec-title{ font-size:11px; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); }
+  .field{ display:flex; flex-direction:column; gap:6px; }
+  .field label{ font-size:12px; color:var(--muted); font-weight:600; }
+  input[type=number], select{ font:inherit; font-size:14px; color:var(--text); background:var(--bg);
+    border:1px solid var(--line); border-radius:2px; padding:10px 12px; width:100%; }
+  input[type=range]{ width:100%; accent-color:var(--accent); }
+  .seg{ display:flex; gap:8px; background:var(--surface); border:1px solid var(--line);
+        border-radius:999px; padding:4px; }
+  .seg button{ flex:1; padding:9px 0; border-radius:999px; border:none; font:inherit; font-size:13px;
+    font-weight:600; cursor:pointer; background:transparent; color:var(--muted); }
+  .seg button.on{ background:var(--accent); color:var(--accent-ink); }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .toggles{ display:flex; gap:10px; }
+  .tog{ flex:1; padding:12px 0; border-radius:var(--radius); font:inherit; font-size:13px; font-weight:600;
+        cursor:pointer; border:1px solid var(--line); background:var(--surface); color:var(--muted); }
+  .tog.on{ border-color:var(--accent); color:var(--accent);
+           background:color-mix(in srgb, var(--accent) 14%, transparent); }
+  .preview{ background:var(--surface); border:1px dashed var(--line); border-radius:var(--radius);
+            padding:12px 14px; font-size:13px; color:var(--muted); line-height:1.5; }
+  .preview b{ color:var(--text); font-weight:600; font-family:var(--mono); }
+  .voicewarn{ border-radius:var(--radius); padding:12px 14px; font-size:12px; line-height:1.5; color:var(--text);
+    background:color-mix(in srgb, var(--accent) 12%, transparent);
+    border:1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+
+  #tabbar{ position:fixed; left:0; right:0; bottom:0; display:flex; gap:6px;
+    padding:10px 22px calc(env(safe-area-inset-bottom) + 14px);
+    background:color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); border-top:1px solid var(--line); }
+  .tab{ flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; background:none;
+    border:none; font:inherit; font-size:11px; font-weight:600; cursor:pointer; padding:4px 0; color:var(--muted); }
+  .tab.on{ color:var(--accent); }
+  .tab .ic{ font-size:16px; line-height:1; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="title">
+      <span class="t1">Nederlands</span>
+      <span class="t2">Audio trainer</span>
+    </div>
+    <button id="modeBtn"><span class="dot"></span><span id="modeLabel">Light</span></button>
+  </header>
+
+  <div id="scroll">
+    <div class="page" id="pgPractice">
+      <div class="card hero">
+        <div class="hero-top">
+          <span class="badge" id="badge">Now practicing</span>
+          <span class="prog" id="prog">0 words</span>
+        </div>
+        <div class="wave" id="wave" hidden></div>
+        <div class="hero-mid">
+          <div id="live" hidden>
+            <div class="cur-nl" id="curNl"></div>
+            <div class="cur-en" id="curEn"></div>
+            <div class="cur-note" id="curNote"></div>
+          </div>
+          <div id="idle">
+            <div class="idle-t" id="idleT">Ready when you are</div>
+            <div class="idle-s" id="idleS">Pick words and press play.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="transport">
+        <button class="sec-btn" id="prev" disabled>‹‹</button>
+        <button class="play-btn" id="play">▶</button>
+        <button class="sec-btn" id="next" disabled>››</button>
+      </div>
+      <div class="stop-row"><button id="stop" disabled>◼ Stop</button></div>
+
+      <div class="card summary">
+        <div class="row"><span class="k">Selected</span><span class="v" id="sumSel">0 words</span></div>
+        <div class="divider"></div>
+        <div class="row"><span class="k">Pattern</span><span class="v mono" id="sumPat">—</span></div>
+      </div>
+    </div>
+
+    <div class="page" id="pgWords" hidden>
+      <div class="words-top">
+        <span class="lbl" id="wordsSel">0 selected</span>
+        <div style="display:flex; gap:8px;">
+          <button class="chip" id="selAll">Select all</button>
+          <button class="chip" id="clear">Clear</button>
+        </div>
+      </div>
+      <div id="groups" style="display:flex; flex-direction:column; gap:14px;"></div>
+    </div>
+
+    <div class="page" id="pgTune" hidden>
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <span class="sec-title">Playback pattern</span>
+        <div class="field">
+          <label>Play first</label>
+          <div class="seg">
+            <button id="firstEn">English</button>
+            <button id="firstNl">Dutch</button>
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label>Dutch repeats</label><input type="number" id="nlReps" min="0" max="9" value="2"></div>
+          <div class="field"><label>English repeats</label><input type="number" id="enReps" min="0" max="9" value="1"></div>
+          <div class="field"><label>Gap: repeats (s)</label><input type="number" id="repGap" min="0" max="10" step="0.5" value="1"></div>
+          <div class="field"><label>Gap: words (s)</label><input type="number" id="itemGap" min="0" max="10" step="0.5" value="1.5"></div>
+        </div>
+        <div class="field">
+          <label>Speaking speed · <span id="rateLabel">0.90×</span></label>
+          <input type="range" id="rate" min="0.5" max="1.3" step="0.05" value="0.9">
+        </div>
+        <div class="toggles">
+          <button class="tog" id="shuffle">⇄ Shuffle</button>
+          <button class="tog on" id="loop">↻ Loop</button>
+        </div>
+        <div class="preview">Each word plays: <b id="seqPreview">EN → NL → NL</b></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div style="display:flex; flex-direction:column; gap:14px;" id="voicesSection">
+        <span class="sec-title">Voices</span>
+        <div class="field"><label>Dutch voice</label><select id="nlVoice"></select></div>
+        <div class="field"><label>English voice</label><select id="enVoice"></select></div>
+        <div class="voicewarn" id="voiceWarn" hidden></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tabbar">
+    <button class="tab on" id="tabPractice"><span class="ic">◉</span><span>Practice</span></button>
+    <button class="tab" id="tabWords"><span class="ic">☰</span><span>Words</span></button>
+    <button class="tab" id="tabTune"><span class="ic">⚙</span><span>Tune</span></button>
+  </div>
+</div>
+
+<script src="words.js"></script>
+<script>
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id);};
+
+  var Cap=window.Capacitor;
+  var IS_NATIVE=!!(Cap&&Cap.isNativePlatform&&Cap.isNativePlatform());
+  var NativeTTS=(IS_NATIVE&&Cap.Plugins)?Cap.Plugins.TextToSpeech:null;
+
+  var store={
+    get:function(k,d){ try{var v=localStorage.getItem(k); return v==null?d:JSON.parse(v);}catch(e){return d;} },
+    set:function(k,v){ try{localStorage.setItem(k,JSON.stringify(v));}catch(e){} }
+  };
+
+  var S={
+    mode: store.get('nl_mode','light'),
+    tab:'practice',
+    selected:new Set(),
+    open:{},
+    s: Object.assign({first:'en',nlReps:2,enReps:1,repGap:1,itemGap:1.5,rate:0.9,shuffle:false,loop:true,nlVoice:'',enVoice:''}, store.get('nl_settings',{})),
+    running:false, paused:false, pos:0, curLang:null,
+    voices:[], voiceWarn:'', idleMsg:''
+  };
+  var queue=[], timer=null;
+
+  function vocab(){ return (window.VOCAB&&Array.isArray(window.VOCAB.groups))?window.VOCAB:{groups:[]}; }
+  function nlLang(){ return vocab().dutchLang||'nl-NL'; }
+  function enLang(){ return vocab().translationLang||'en-US'; }
+  function keyFor(g,i){ return g+':'+i; }
+  function clampInt(v,lo,hi){ v=parseInt(v,10); if(isNaN(v))v=lo; return Math.min(hi,Math.max(lo,v)); }
+  function clampF(v,lo,hi){ v=parseFloat(v); if(isNaN(v))v=lo; return Math.min(hi,Math.max(lo,v)); }
+  function secs(v){ var f=parseFloat(v); return (isNaN(f)?0:f)*1000; }
+  function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];}); }
+  function saveSettings(){ store.set('nl_settings',S.s); }
+
+  function applyMode(){
+    document.documentElement.setAttribute('data-mode', S.mode==='dark'?'dark':'light');
+    $('modeLabel').textContent = S.mode==='dark'?'Dark':'Light';
+  }
+  $('modeBtn').addEventListener('click',function(){ S.mode=S.mode==='dark'?'light':'dark'; store.set('nl_mode',S.mode); applyMode(); });
+
+  function setTab(t){
+    S.tab=t;
+    $('pgPractice').hidden = t!=='practice';
+    $('pgWords').hidden = t!=='words';
+    $('pgTune').hidden = t!=='tune';
+    $('tabPractice').classList.toggle('on', t==='practice');
+    $('tabWords').classList.toggle('on', t==='words');
+    $('tabTune').classList.toggle('on', t==='tune');
+    $('scroll').scrollTop=0;
+  }
+  $('tabPractice').addEventListener('click',function(){setTab('practice');});
+  $('tabWords').addEventListener('click',function(){setTab('words');});
+  $('tabTune').addEventListener('click',function(){setTab('tune');});
+
+  function renderGroups(){
+    var V=vocab(), host=$('groups'); host.innerHTML='';
+    V.groups.forEach(function(group,gi){
+      if(S.open[gi]===undefined) S.open[gi]=true;
+      var wrap=document.createElement('div'); wrap.className='card group'+(S.open[gi]?'':' closed');
+      var head=document.createElement('div'); head.className='group-head';
+      var cb=document.createElement('input'); cb.type='checkbox'; cb.className='gcb'; cb.dataset.group=gi;
+      var name=document.createElement('span'); name.className='gname'; name.textContent=group.name;
+      var cnt=document.createElement('span'); cnt.className='gcount'; cnt.textContent=group.items.length;
+      var chev=document.createElement('span'); chev.className='chev'; chev.textContent='›';
+      head.appendChild(cb); head.appendChild(name); head.appendChild(cnt); head.appendChild(chev);
+      var items=document.createElement('div'); items.className='items';
+      group.items.forEach(function(it,ii){
+        var lab=document.createElement('label'); lab.className='item';
+        var icb=document.createElement('input'); icb.type='checkbox'; icb.className='icb'; icb.dataset.key=keyFor(gi,ii);
+        var col=document.createElement('span'); col.className='col';
+        col.innerHTML="<span class='nl'>"+esc(it.nl)+"</span><span class='en'>"+esc(it.en)+"</span>";
+        lab.appendChild(icb); lab.appendChild(col); items.appendChild(lab);
+      });
+      wrap.appendChild(head); wrap.appendChild(items); host.appendChild(wrap);
+
+      head.addEventListener('click',function(e){
+        if(e.target===cb) return;
+        S.open[gi]=!S.open[gi]; wrap.classList.toggle('closed',!S.open[gi]);
+      });
+      cb.addEventListener('click',function(e){ e.stopPropagation(); });
+      cb.addEventListener('change',function(){ toggleGroup(gi); });
+    });
+    host.querySelectorAll('.icb').forEach(function(b){
+      b.addEventListener('change',function(){ toggleItem(b.dataset.key); });
+    });
+    refreshChecks();
+  }
+  function refreshChecks(){
+    var V=vocab();
+    document.querySelectorAll('.icb').forEach(function(b){ b.checked=S.selected.has(b.dataset.key); });
+    document.querySelectorAll('.gcb').forEach(function(b){
+      var gi=+b.dataset.group; var items=V.groups[gi].items;
+      b.checked = items.length>0 && items.every(function(_,ii){ return S.selected.has(keyFor(gi,ii)); });
+    });
+    updateCounts();
+  }
+  function toggleItem(key){ if(S.selected.has(key)) S.selected.delete(key); else S.selected.add(key); refreshChecks(); }
+  function toggleGroup(gi){
+    var V=vocab(), items=V.groups[gi].items;
+    var all=items.every(function(_,ii){ return S.selected.has(keyFor(gi,ii)); });
+    items.forEach(function(_,ii){ var k=keyFor(gi,ii); if(all) S.selected.delete(k); else S.selected.add(k); });
+    refreshChecks();
+  }
+  $('selAll').addEventListener('click',function(){
+    var V=vocab(); S.selected=new Set(); V.groups.forEach(function(g,gi){ g.items.forEach(function(_,ii){ S.selected.add(keyFor(gi,ii)); }); }); refreshChecks();
+  });
+  $('clear').addEventListener('click',function(){ S.selected=new Set(); refreshChecks(); });
+
+  function selectedItems(){
+    var V=vocab(), out=[];
+    V.groups.forEach(function(g,gi){ g.items.forEach(function(it,ii){ if(S.selected.has(keyFor(gi,ii))) out.push(it); }); });
+    return out;
+  }
+
+  function stepPlan(){
+    var s=S.s, steps=[]; var push=function(l,n){ for(var i=0;i<n;i++) steps.push(l); };
+    if(s.first==='nl'){ push('nl',s.nlReps); push('en',s.enReps); } else { push('en',s.enReps); push('nl',s.nlReps); }
+    return steps;
+  }
+  function updateCounts(){
+    var n=S.selected.size;
+    $('sumSel').textContent=n+(n===1?' word':' words');
+    $('wordsSel').textContent=n+' selected';
+    var plan=stepPlan();
+    $('sumPat').textContent = plan.length ? (S.s.enReps+'·EN / '+S.s.nlReps+'·NL') : '—';
+    if(!S.running) $('prog').textContent = n+(n===1?' word':' words');
+  }
+  function updatePreview(){
+    var plan=stepPlan();
+    $('seqPreview').textContent = plan.length ? plan.map(function(x){return x==='nl'?'NL':'EN';}).join(' → ') : 'nothing set';
+    updateCounts();
+  }
+
+  function segUpdate(){
+    $('firstEn').classList.toggle('on', S.s.first==='en');
+    $('firstNl').classList.toggle('on', S.s.first==='nl');
+  }
+  $('firstEn').addEventListener('click',function(){ S.s.first='en'; segUpdate(); updatePreview(); saveSettings(); });
+  $('firstNl').addEventListener('click',function(){ S.s.first='nl'; segUpdate(); updatePreview(); saveSettings(); });
+  function numHandler(id,field,lo,hi,isFloat){
+    $(id).addEventListener('change',function(e){
+      var v=isFloat?clampF(e.target.value,lo,hi):clampInt(e.target.value,lo,hi);
+      S.s[field]=v; e.target.value=v; updatePreview(); saveSettings();
+    });
+  }
+  numHandler('nlReps','nlReps',0,9,false);
+  numHandler('enReps','enReps',0,9,false);
+  numHandler('repGap','repGap',0,10,true);
+  numHandler('itemGap','itemGap',0,10,true);
+  $('rate').addEventListener('input',function(e){
+    S.s.rate=clampF(e.target.value,0.5,1.3); $('rateLabel').textContent=S.s.rate.toFixed(2)+'×';
+  });
+  $('rate').addEventListener('change',saveSettings);
+  $('shuffle').addEventListener('click',function(){ S.s.shuffle=!S.s.shuffle; $('shuffle').classList.toggle('on',S.s.shuffle); saveSettings(); });
+  $('loop').addEventListener('click',function(){ S.s.loop=!S.s.loop; $('loop').classList.toggle('on',S.s.loop); updateNow(); saveSettings(); });
+
+  function loadVoices(){
+    var voices=window.speechSynthesis?window.speechSynthesis.getVoices():[];
+    S.voices=voices;
+    fillVoices($('nlVoice'),'nl', 'nlVoice');
+    fillVoices($('enVoice'),'en', 'enVoice');
+    var hasNl=voices.some(function(v){return /^nl/i.test(v.lang);});
+    var warn=$('voiceWarn');
+    if(!hasNl && voices.length){
+      warn.hidden=false;
+      warn.textContent="No Dutch voice found in this browser. The Dutch side may sound off. Add a Dutch (Nederlands) voice in your system speech settings, then pick it here.";
+    } else warn.hidden=true;
+  }
+  function fillVoices(sel,pre,field){
+    if(!sel) return;
+    var m=S.voices.filter(function(v){return v.lang.toLowerCase().indexOf(pre)===0;});
+    var list=m.length?m:S.voices;
+    sel.innerHTML='';
+    list.forEach(function(v){ var o=document.createElement('option'); o.value=v.name; o.textContent=v.name+' ('+v.lang+')'; sel.appendChild(o); });
+    if(S.s[field] && list.some(function(v){return v.name===S.s[field];})) sel.value=S.s[field];
+    else if(list[0]){ S.s[field]=list[0].name; sel.value=list[0].name; }
+  }
+  $('nlVoice').addEventListener('change',function(e){ S.s.nlVoice=e.target.value; saveSettings(); });
+  $('enVoice').addEventListener('change',function(e){ S.s.enVoice=e.target.value; saveSettings(); });
+  function voiceByName(n){ for(var i=0;i<S.voices.length;i++) if(S.voices[i].name===n) return S.voices[i]; return null; }
+
+  function setupSpeech(){
+    if(IS_NATIVE){
+      $('voicesSection').style.display='none';
+      if(NativeTTS&&NativeTTS.getSupportedLanguages){
+        NativeTTS.getSupportedLanguages().then(function(res){
+          var langs=(res&&res.languages)||[];
+          var hasNl=langs.some(function(l){return /^nl/i.test(l);});
+          if(!hasNl){
+            $('voicesSection').style.display='flex';
+            $('nlVoice').parentNode.style.display='none';
+            $('enVoice').parentNode.style.display='none';
+            var warn=$('voiceWarn'); warn.hidden=false;
+            warn.innerHTML="Your phone has no Dutch voice installed. Add it in <b>Settings &rarr; System &rarr; Languages &rarr; Text-to-speech output</b> (install the Dutch language data), then reopen the app.";
+          }
+        }).catch(function(){});
+      }
+      return;
+    }
+    if(window.speechSynthesis){ loadVoices(); window.speechSynthesis.onvoiceschanged=loadVoices; }
+  }
+
+  function speak(text,lang,done){
+    var fullLang=(lang==='nl')?nlLang():enLang();
+    var rate=clampF(S.s.rate,0.5,1.3);
+    if(NativeTTS){
+      NativeTTS.speak({text:text,lang:fullLang,rate:rate,pitch:1.0,volume:1.0,category:'playback'}).then(done).catch(function(){done();});
+      return;
+    }
+    if(!window.speechSynthesis){ done(); return; }
+    var u=new SpeechSynthesisUtterance(text);
+    var v=voiceByName(lang==='nl'?S.s.nlVoice:S.s.enVoice); if(v) u.voice=v;
+    u.lang=fullLang; u.rate=rate; u.onend=done; u.onerror=done;
+    window.speechSynthesis.speak(u);
+  }
+  function cancelSpeech(){ if(NativeTTS){ try{NativeTTS.stop();}catch(e){} } else if(window.speechSynthesis){ window.speechSynthesis.cancel(); } }
+
+  var waveBuilt=false;
+  function buildWave(){
+    if(waveBuilt) return; waveBuilt=true;
+    var w=$('wave'); w.innerHTML='';
+    for(var i=0;i<26;i++){
+      var b=document.createElement('i');
+      var h=8+(i%5)*5; b.style.height=h+'px';
+      b.style.animation='tp-bar '+(0.7+(i%4)*0.18)+'s ease-in-out '+((i%6)*0.07)+'s infinite';
+      w.appendChild(b);
+    }
+  }
+
+  function updateNow(){
+    var live=S.running && !!S.curLang;
+    $('wave').hidden=!live;
+    if(live){ buildWave(); }
+    $('live').hidden=!live;
+    $('idle').hidden=live;
+    var n=S.selected.size;
+    if(S.running){
+      $('prog').textContent='Word '+Math.min(S.pos+1, queue.length||n)+' of '+(queue.length||n)+(S.s.loop?' · loop':'');
+    } else {
+      $('prog').textContent=n+(n===1?' word':' words');
+    }
+    $('badge').textContent = live ? (S.curLang==='nl'?'Dutch':'English') : 'Now practicing';
+    if(!live){
+      var title='Ready when you are', sub=n+' words queued. Press play and listen along.';
+      if(S.idleMsg){ title=S.idleMsg.split('.')[0]; sub='Adjust your selection or pattern anytime.'; }
+      if(!n){ title='Nothing selected'; sub='Open the Words tab and pick some words or a whole group.'; }
+      $('idleT').textContent=title; $('idleS').textContent=sub;
+    }
+  }
+  function showCur(item,lang){
+    $('live').hidden=false; $('idle').hidden=true; $('wave').hidden=false; buildWave();
+    $('curNl').textContent=item.nl; $('curEn').textContent=item.en;
+    $('curNote').textContent=item.note||''; $('curNote').style.display=item.note?'block':'none';
+    $('badge').textContent=lang==='nl'?'Dutch':'English';
+    $('curNl').classList.toggle('speaking', lang==='nl');
+    $('curEn').classList.toggle('on', lang==='en');
+    $('curEn').classList.toggle('speaking', lang==='en');
+  }
+
+  function setButtons(){
+    var r=S.running;
+    $('prev').disabled=!r; $('next').disabled=!r; $('stop').disabled=!r;
+    $('play').textContent=(r&&!S.paused)?'❚❚':'▶';
+  }
+
+  function play(){
+    if(S.paused&&S.running){ resume(); return; }
+    var items=selectedItems();
+    if(!items.length||!stepPlan().length){ setTab('words'); return; }
+    queue=items.slice(); if(S.s.shuffle) shuffle(queue);
+    S.pos=0; S.running=true; S.paused=false; S.idleMsg=''; setButtons(); playWord();
+  }
+  function shuffle(a){ for(var i=a.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=a[i]; a[i]=a[j]; a[j]=t; } }
+  function playWord(){
+    if(!S.running) return;
+    if(S.pos>=queue.length){
+      if(S.s.loop){ S.pos=0; if(S.s.shuffle) shuffle(queue); }
+      else return finish('Done. Press play to go again.');
+    }
+    updateNow();
+    runSteps(queue[S.pos], stepPlan(), 0);
+  }
+  function runSteps(item,steps,si){
+    if(!S.running||S.paused) return;
+    if(si>=steps.length){ S.pos++; timer=setTimeout(playWord, secs(S.s.itemGap)); return; }
+    var lang=steps[si]; S.curLang=lang; showCur(item,lang);
+    speak(lang==='nl'?item.nl:item.en, lang, function(){
+      if(!S.running||S.paused) return;
+      var gap=(si<steps.length-1)?secs(S.s.repGap):0;
+      timer=setTimeout(function(){ runSteps(item,steps,si+1); }, gap);
+    });
+  }
+  function pause(){
+    if(!S.running||S.paused) return;
+    S.paused=true; if(timer) clearTimeout(timer);
+    if(NativeTTS) cancelSpeech(); else if(window.speechSynthesis) window.speechSynthesis.pause();
+    setButtons();
+  }
+  function resume(){
+    if(!S.running) return; S.paused=false; setButtons();
+    if(NativeTTS){ playWord(); return; }
+    if(window.speechSynthesis) window.speechSynthesis.resume();
+  }
+  function next(){ if(!S.running) return; if(timer) clearTimeout(timer); cancelSpeech(); S.paused=false; S.pos++; setButtons(); playWord(); }
+  function prev(){ if(!S.running) return; if(timer) clearTimeout(timer); cancelSpeech(); S.paused=false; S.pos=Math.max(0,S.pos-1); setButtons(); playWord(); }
+  function finish(msg){ hardStop(); S.idleMsg=msg; S.running=false; S.paused=false; S.curLang=null; setButtons(); updateNow(); }
+  function hardStop(){ if(timer) clearTimeout(timer); cancelSpeech(); }
+  function stopAll(){ hardStop(); S.idleMsg='Stopped. Press play to start over.'; S.running=false; S.paused=false; S.curLang=null; setButtons(); updateNow(); }
+
+  $('play').addEventListener('click',function(){ (S.running&&!S.paused)?pause():play(); });
+  $('prev').addEventListener('click',prev);
+  $('next').addEventListener('click',next);
+  $('stop').addEventListener('click',stopAll);
+
+  document.addEventListener('visibilitychange',function(){
+    if(!IS_NATIVE&&!document.hidden&&S.running&&!S.paused&&window.speechSynthesis&&window.speechSynthesis.paused) window.speechSynthesis.resume();
+  });
+
+  function initVocab(tries){
+    var V=vocab();
+    if(!V.groups.length){ if(tries<40) setTimeout(function(){initVocab(tries+1);},100); return; }
+    if(!S.selected.size && V.groups[0]) V.groups[0].items.forEach(function(_,ii){ S.selected.add('0:'+ii); });
+    renderGroups(); updatePreview(); updateNow();
+  }
+
+  applyMode();
+  $('nlReps').value=S.s.nlReps; $('enReps').value=S.s.enReps;
+  $('repGap').value=S.s.repGap; $('itemGap').value=S.s.itemGap;
+  $('rate').value=S.s.rate; $('rateLabel').textContent=clampF(S.s.rate,0.5,1.3).toFixed(2)+'×';
+  $('shuffle').classList.toggle('on',S.s.shuffle);
+  $('loop').classList.toggle('on',S.s.loop);
+  segUpdate();
+  setupSpeech();
+  initVocab(0);
+  updatePreview();
+})();
+</script>
+</body>
+</html>
