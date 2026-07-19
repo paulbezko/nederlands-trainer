@@ -30,7 +30,7 @@ jobs:
           ls -la www
 
       - name: Install Capacitor
-        run: npm install @capacitor/core@8 @capacitor/cli@8 @capacitor/android@8 @capacitor-community/text-to-speech@8 @capgo/capacitor-media-session@8 --no-audit --no-fund
+        run: npm install @capacitor/core@8 @capacitor/cli@8 @capacitor/android@8 @capacitor-community/text-to-speech@8 --no-audit --no-fund
 
       - name: Add Android platform
         run: npx cap add android
@@ -101,7 +101,6 @@ jobs:
 
       - name: Use stable debug signing key
         run: |
-          sed -i 's#<application#<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <application#' android/app/src/main/AndroidManifest.xml || true
           echo "$KS_B64" | base64 -d > android/app/nl-signing.jks
           {
             echo ""
