@@ -34,6 +34,17 @@ jobs:
 
       - name: Add Android platform
         run: npx cap add android
+      - name: Inject native playback module
+        run: |
+          PKG=android/app/src/main/java/com/paulbezko/dutchtrainer
+          mkdir -p "$PKG"
+          cp native/PlaybackService.java native/NlPlayerPlugin.java native/MainActivity.java "$PKG/"
+          MAN=android/app/src/main/AndroidManifest.xml
+          sed -i 's#</manifest>#    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n</manifest>#' "$MAN"
+          sed -i 's#</application>#    <service android:name=".PlaybackService" android:exported="false" android:foregroundServiceType="mediaPlayback"/>\n    </application>#' "$MAN"
+          echo "---- manifest ----"; cat "$MAN"
+          echo "---- java files ----"; ls "$PKG"
+
 
       - name: Branding (name + icon)
         run: |
