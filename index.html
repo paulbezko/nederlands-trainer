@@ -274,6 +274,7 @@
   var Cap=window.Capacitor;
   var IS_NATIVE=!!(Cap&&Cap.isNativePlatform&&Cap.isNativePlatform());
   var NativeTTS=(IS_NATIVE&&Cap.Plugins)?Cap.Plugins.TextToSpeech:null;
+  var MS=(IS_NATIVE&&Cap.Plugins)?Cap.Plugins.MediaSession:null;
 
   var store={
     get:function(k,d){ try{var v=localStorage.getItem(k); return v==null?d:JSON.parse(v);}catch(e){return d;} },
@@ -710,6 +711,15 @@
   var silentEl=null, mediaReady=false;
   function mediaInit(){
     if(mediaReady) return; mediaReady=true;
+    if(MS){
+      var reg=function(a,cb){ try{ MS.setActionHandler({action:a}, cb); }catch(e){} };
+      reg('play',function(){ (S.running&&S.paused)?resume():play(); });
+      reg('pause',function(){ pause(); });
+      reg('previoustrack',function(){ prev(); });
+      reg('nexttrack',function(){ next(); });
+      reg('stop',function(){ stopAll(); });
+      return;
+    }
     silentEl=document.createElement('audio'); silentEl.loop=true; silentEl.preload='auto';
     silentEl.setAttribute('playsinline',''); silentEl.src=SILENCE_URI; document.body.appendChild(silentEl);
     if('mediaSession' in navigator){
@@ -721,10 +731,15 @@
       try{ ms.setActionHandler('stop',function(){ stopAll(); }); }catch(e){}
     }
   }
-  function mediaAcquire(){ mediaInit(); if(silentEl){ var p=silentEl.play(); if(p&&p.catch) p.catch(function(){}); } mediaState('playing'); }
-  function mediaState(st){ if('mediaSession' in navigator){ try{ navigator.mediaSession.playbackState=st; }catch(e){} } }
-  function mediaRelease(){ if(silentEl){ try{ silentEl.pause(); }catch(e){} } mediaState('none'); }
-  function mediaMeta(item){ if('mediaSession' in navigator && window.MediaMetadata){ try{ navigator.mediaSession.metadata=new MediaMetadata({ title:item.nl, artist:item.en, album:'Nederlands' }); }catch(e){} } }
+  function mediaAcquire(){
+    mediaInit();
+    if(MS){ try{ MS.setMetadata({title:'Nederlands', artist:'Audio trainer', album:'Nederlands'}); }catch(e){} }
+    else if(silentEl){ var p=silentEl.play(); if(p&&p.catch) p.catch(function(){}); }
+    mediaState('playing');
+  }
+  function mediaState(st){ if(MS){ try{ MS.setPlaybackState({playbackState:st}); }catch(e){} return; } if('mediaSession' in navigator){ try{ navigator.mediaSession.playbackState=st; }catch(e){} } }
+  function mediaRelease(){ if(!MS && silentEl){ try{ silentEl.pause(); }catch(e){} } mediaState('none'); }
+  function mediaMeta(item){ if(MS){ try{ MS.setMetadata({title:item.nl, artist:item.en, album:'Nederlands'}); }catch(e){} return; } if('mediaSession' in navigator && window.MediaMetadata){ try{ navigator.mediaSession.metadata=new MediaMetadata({ title:item.nl, artist:item.en, album:'Nederlands' }); }catch(e){} } }
 
   function initVocab(tries){
     var V=vocab();
