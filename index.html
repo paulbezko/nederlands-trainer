@@ -275,6 +275,7 @@
   var IS_NATIVE=!!(Cap&&Cap.isNativePlatform&&Cap.isNativePlatform());
   var NativeTTS=(IS_NATIVE&&Cap.Plugins)?Cap.Plugins.TextToSpeech:null;
   var MS=(IS_NATIVE&&Cap.Plugins)?Cap.Plugins.MediaSession:null;
+  var NL=(IS_NATIVE&&Cap.Plugins)?Cap.Plugins.NlPlayer:null;
 
   var store={
     get:function(k,d){ try{var v=localStorage.getItem(k); return v==null?d:JSON.parse(v);}catch(e){return d;} },
@@ -582,7 +583,14 @@
     var items=selectedItems();
     if(!items.length||!stepPlan().length){ setTab('words'); return; }
     queue=items.slice(); if(S.s.shuffle) shuffle(queue);
-    S.pos=0; S.running=true; S.paused=false; S.idleMsg=''; setButtons(); mediaAcquire(); playWord();
+    S.pos=0; S.running=true; S.paused=false; S.idleMsg='';
+    if(NL){
+      setButtons();
+      try{ NL.start({ items:queue.map(function(it){return {nl:it.nl,en:it.en};}), plan:stepPlan(), repGap:S.s.repGap, itemGap:S.s.itemGap, rate:clampF(S.s.rate,0.5,1.3), nlLang:nlLang(), enLang:enLang(), loop:!!S.s.loop, startPos:0 }); }catch(e){}
+      updateNow();
+      return;
+    }
+    setButtons(); mediaAcquire(); playWord();
   }
   function shuffle(a){ for(var i=a.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=a[i]; a[i]=a[j]; a[j]=t; } }
   function playWord(){
@@ -606,20 +614,23 @@
   }
   function pause(){
     if(!S.running||S.paused) return;
+    if(NL){ S.paused=true; try{NL.pause();}catch(e){} setButtons(); return; }
     S.paused=true; if(timer) clearTimeout(timer);
     if(NativeTTS) cancelSpeech(); else if(window.speechSynthesis) window.speechSynthesis.pause();
     setButtons(); mediaState('paused');
   }
   function resume(){
-    if(!S.running) return; S.paused=false; setButtons(); mediaState('playing');
+    if(!S.running) return;
+    if(NL){ S.paused=false; try{NL.resume();}catch(e){} setButtons(); return; }
+    S.paused=false; setButtons(); mediaState('playing');
     if(NativeTTS){ playWord(); return; }
     if(window.speechSynthesis) window.speechSynthesis.resume();
   }
-  function next(){ if(!S.running) return; if(timer) clearTimeout(timer); cancelSpeech(); S.paused=false; S.pos++; setButtons(); playWord(); }
-  function prev(){ if(!S.running) return; if(timer) clearTimeout(timer); cancelSpeech(); S.paused=false; S.pos=Math.max(0,S.pos-1); setButtons(); playWord(); }
+  function next(){ if(!S.running) return; if(NL){ try{NL.next();}catch(e){} return; } if(timer) clearTimeout(timer); cancelSpeech(); S.paused=false; S.pos++; setButtons(); playWord(); }
+  function prev(){ if(!S.running) return; if(NL){ try{NL.prev();}catch(e){} return; } if(timer) clearTimeout(timer); cancelSpeech(); S.paused=false; S.pos=Math.max(0,S.pos-1); setButtons(); playWord(); }
   function finish(msg){ hardStop(); S.idleMsg=msg; S.running=false; S.paused=false; S.curLang=null; setButtons(); updateNow(); mediaRelease(); }
   function hardStop(){ if(timer) clearTimeout(timer); cancelSpeech(); }
-  function stopAll(){ hardStop(); S.idleMsg='Stopped. Press play to start over.'; S.running=false; S.paused=false; S.curLang=null; setButtons(); updateNow(); mediaRelease(); }
+  function stopAll(){ if(NL){ try{NL.stop();}catch(e){} } hardStop(); S.idleMsg='Stopped. Press play to start over.'; S.running=false; S.paused=false; S.curLang=null; setButtons(); updateNow(); mediaRelease(); }
 
   $('play').addEventListener('click',function(){ (S.running&&!S.paused)?pause():play(); });
   $('prev').addEventListener('click',prev);
@@ -756,6 +767,14 @@
   $('loop').classList.toggle('on',S.s.loop);
   segUpdate();
   setupSpeech();
+  function onNativeState(st){
+    S.running=!!st.running; S.paused=!!st.paused;
+    if(typeof st.pos==='number') S.pos=st.pos;
+    if(!S.running){ S.curLang=null; if(st.stopped) S.idleMsg='Stopped. Press play to start over.'; }
+    else if(st.lang){ S.curLang=st.lang; showCur({nl:st.nl||'',en:st.en||'',note:''}, st.lang); }
+    setButtons(); updateNow();
+  }
+  if(NL){ try{ NL.addListener('state', onNativeState); }catch(e){} }
   initVocab(0);
   updatePreview();
 })();
